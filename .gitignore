@@ -158,3 +158,4 @@ cython_debug/
 
 pyvenv.cfg
 
+scripts/
