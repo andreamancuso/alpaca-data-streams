@@ -1,13 +1,28 @@
 import argparse
 import os
+import array as arr
+
+import simplejson as json
 from dotenv import load_dotenv
-from fastapi import FastAPI, Response
-from fastapi.responses import StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
+# from fastapi import FastAPI, Response
+# from fastapi.responses import StreamingResponse
+# from fastapi.middleware.cors import CORSMiddleware
+# import uvicorn
+import asyncio
+from websockets.asyncio.server import serve
+import threading
+from threading import Lock
+
 load_dotenv()
 
-from alpaca.data.live import StockDataStream
+from alpaca.data.live import StockDataStream, CryptoDataStream, NewsDataStream
+
+s_print_lock = Lock()
+
+def s_print(*a, **b):
+    """Thread safe print function"""
+    with s_print_lock:
+        print(*a, **b)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('api_key')
@@ -17,30 +32,58 @@ args = parser.parse_args()
 api_key = os.environ.get('API_KEY') or args.api_key
 secret_key = os.environ.get('SECRET_KEY') or args.secret_key
 
-wss_client = StockDataStream(api_key, secret_key)
+def crypto_data_stream_worker(websocket, ticks):
+    async def data_handler(data):
+        s_print(data)
+        # await websocket.send(data)
 
-app = FastAPI()
+    crypto_stream = CryptoDataStream(api_key, secret_key)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    for tick in ticks:
+        crypto_stream.subscribe_quotes(data_handler, tick)
 
-# async handler
-def quote_data_handler(data):
-    # quote data will arrive here
-    yield data
+    crypto_stream.run()
 
-wss_client.subscribe_quotes(quote_data_handler, "SPY")
+def stock_data_stream_worker(websocket, ticks):
+    async def data_handler(data):
+        s_print(data)
+        # await websocket.send(data)
 
-wss_client.run()
+    stock_stream = StockDataStream(api_key, secret_key)
 
-@app.get("/stock")
-async def root():
-    return StreamingResponse(quote_data_handler(), media_type="text/event-stream")
+    for tick in ticks:
+        stock_stream.subscribe_quotes(data_handler, tick)
 
+    stock_stream.run()
 
-uvicorn.run(app, host="127.0.0.1", port=8000)
+class AlpacaHelper:
+    def __init__(self):
+        self.threads = {}
+
+    def subscribe(self, websocket, ticks):
+        self.threads['crypto'] = threading.Thread(target=crypto_data_stream_worker, args=(websocket, ticks), daemon=True).start()
+
+alpaca_helper = AlpacaHelper()
+
+async def handle_message(websocket):
+    async for message in websocket:
+        try:
+            parsed_message = json.loads(message)
+            await websocket.send(parsed_message['ticks'])
+
+            alpaca_helper.subscribe(websocket, parsed_message['ticks'])
+
+        except json.JSONDecodeError:
+            print("Unable to decode message")
+            await websocket.send(json.dumps({'error': 'Unable to decode message'}))
+        except Exception as err:
+            print("Unexpected error", err)
+            await websocket.send(json.dumps({'error': 'Unexpected error'}))
+
+async def main():
+    async with serve(handle_message, "localhost", 8765):
+        await asyncio.get_running_loop().create_future()
+
+s_print("ready")
+
+asyncio.run(main())

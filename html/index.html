@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+   <title>WebSocket Example</title>
+</head>
+
+<body>
+   <h1>WebSocket Client</h1>
+   <input type="text"
+          id="messageInput"
+          placeholder="Type a message..." value='{"ticks": ["BTC/USD","ETH/USD"]}' />
+   <button id="sendButton">
+      Send
+   </button>
+   <div id="messages">
+   </div>
+
+   <script>
+      const socket = new WebSocket('ws://localhost:8765');
+
+      socket.addEventListener('open',
+      () => {
+      console.log('Connected to server');
+      });
+
+      socket.addEventListener('close',
+      () => {
+      console.log('Disconnected from server');
+      });
+
+      socket.addEventListener('message',
+      (event) => {
+      const messageDiv = document.createElement('div');
+      messageDiv.textContent = event.data;
+      document.getElementById('messages').appendChild(messageDiv);
+      });
+
+      document.getElementById('sendButton').addEventListener('click',
+      () => {
+      const messageInput = document.getElementById('messageInput');
+      const message = messageInput.value;
+      socket.send(message);
+      // messageInput.value = '';
+      });
+   </script>
+</body>
+</html>
