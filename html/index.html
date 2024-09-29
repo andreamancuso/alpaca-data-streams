@@ -3,6 +3,12 @@
 
 <head>
    <title>WebSocket Example</title>
+
+   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+   <!-- <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.min.js"></script> -->
+   <!-- <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script> -->
+
 </head>
 
 <body>
@@ -16,7 +22,75 @@
 
    <div id="messages"></div>
 
+   <canvas id="myChart"></canvas>
+
    <script>
+      document.addEventListener("DOMContentLoaded", (event) => {
+  
+      const datasets = {
+         'BTC/USD': {
+            label: 'BTC/USD',
+            fill: false,
+            data: []
+         },
+         'ETH/USD': {
+            label: 'ETH/USD',
+            fill: false,
+            data: []
+         }
+      };
+
+      // const 
+
+const data = {
+  labels: [],
+  datasets: [datasets['BTC/USD'], datasets['ETH/USD']]
+};
+
+const config = {
+         type: 'line',
+         data: data,
+         options: {
+            // plugins: {
+            //    title: {
+            //    text: 'Chart.js Time Scale',
+            //    display: true
+            //    }
+            // },
+            scales: {
+               x: {
+               // type: 'time',
+               // time: {
+               //    // Luxon format string
+               //    tooltipFormat: 'DD T'
+               // },
+               title: {
+                  display: true,
+                  text: 'Date'
+               }
+               },
+               y: {
+               title: {
+                  display: true,
+                  text: 'value'
+               }
+               }
+            },
+         },
+         };
+
+
+
+const ctx = document.getElementById('myChart');
+
+  const chart = new Chart(ctx, config);
+
+  const addPoint = (sourceKey, x, y) => {
+      datasets[sourceKey].data.push({x, y});
+
+      chart.update();
+   };
+
       const socket = new WebSocket('ws://localhost:8765');
 
       socket.addEventListener('open', () => {
@@ -28,12 +102,18 @@
       });
 
       socket.addEventListener('message', (event) => {
-         const messageDiv = document.createElement('div');
-         messageDiv.textContent = event.data;
+         // const messageDiv = document.createElement('div');
+         // messageDiv.textContent = event.data;
 
-         console.log(event.data);
+         const data = JSON.parse(event.data);
 
-         document.getElementById('messages').appendChild(messageDiv);
+         console.log(data);
+
+         addPoint(data.S, data.Timestamp, data.BidPrice);
+
+         // document.getElementById('messages').appendChild(messageDiv);
+
+         // console.log(sources);
       });
 
       document.getElementById('btnSubscribe').addEventListener('click', () => {
@@ -46,7 +126,8 @@
          
          socket.send(message);
          // messageInput.value = '';
-      });
+      });console.log("DOM fully loaded and parsed");
+   });
    </script>
 </body>
 </html>
