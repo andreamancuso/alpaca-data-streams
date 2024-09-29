@@ -1,6 +1,5 @@
 import argparse
 import os
-import array as arr
 from threading import Timer
 import simplejson as json
 from dotenv import load_dotenv
@@ -12,7 +11,7 @@ import queue
 
 load_dotenv()
 
-from alpaca.data.live import StockDataStream, CryptoDataStream, NewsDataStream
+from alpaca.data.live import StockDataStream, CryptoDataStream
 
 s_print_lock = Lock()
 
@@ -36,18 +35,15 @@ def crypto_data_stream_worker(data_queue, control_queue):
     crypto_stream = CryptoDataStream(api_key, secret_key)
 
     def start():
-        s_print("about to invoke .run() on crypto_stream")
         crypto_stream.run()
 
     while True:
         try:
             ticks = control_queue.get(timeout=3)  # 3s timeout
-            s_print(f"subscribing to {ticks}")
             if len(ticks) > 0:
                 for tick in ticks:
                     crypto_stream.subscribe_quotes(data_handler, tick)
 
-                # s_print("c")
                 start_timer = Timer(0.1, start)
                 start_timer.daemon = True
                 start_timer.start()
@@ -56,8 +52,6 @@ def crypto_data_stream_worker(data_queue, control_queue):
 
         except queue.Empty:
             pass
-        # except KeyboardInterrupt:
-        #     break
 
 def stock_data_stream_worker(data_queue, control_queue, ticks):
     async def data_handler(data):
@@ -75,16 +69,10 @@ def process_data(helper):
     while True:
         try:
             data = helper.data_queues['crypto'].get(timeout=3)
-
-            s_print(json.dumps({'symbol': data.symbol,'bid_price': data.bid_price}))
-            # await helper.websocket.send(json.dumps({'symbol': data.symbol,'bid_price': data.bid_price}))
             asyncio.run(helper.websocket.send(json.dumps({'symbol': data.symbol,'bid_price': data.bid_price})))
-            s_print('sent')
 
         except queue.Empty:
             pass
-        # except KeyboardInterrupt:
-        #     break
 
 class AlpacaHelper:
     def __init__(self):
@@ -106,10 +94,6 @@ class AlpacaHelper:
                                                   daemon=True)
         self.threads['websocket'].start()
 
-        # process_data_timer = Timer(0.1, process_data, [self])
-        # process_data_timer.daemon = True
-        # process_data_timer.start()
-
     def set_websocket(self, websocket):
         self.websocket = websocket
 
@@ -122,7 +106,6 @@ class AlpacaHelper:
 alpaca_helper = AlpacaHelper()
 
 async def handle_message(websocket):
-    print("here")
     alpaca_helper.set_websocket(websocket)
 
     async for message in websocket:
@@ -144,7 +127,5 @@ async def handle_message(websocket):
 async def main():
     async with serve(handle_message, "localhost", 8765):
         await asyncio.get_running_loop().create_future()
-
-# s_print("ready")
 
 asyncio.run(main())
