@@ -7,41 +7,45 @@
 
 <body>
    <h1>WebSocket Client</h1>
-   <input type="text"
-          id="messageInput"
-          placeholder="Type a message..." value='{"ticks": ["BTC/USD","ETH/USD"]}' />
-   <button id="sendButton">
-      Send
-   </button>
-   <div id="messages">
+
+   <div>
+      <input type="text" id="csvTicks" placeholder="comma-separated ticks" value='BTC/USD,ETH/USD' />
+      <button id="btnSubscribe">Subscribe</button>
+      <button id="btnUnsubscribe">Unsubscribe</button>
    </div>
+
+   <div id="messages"></div>
 
    <script>
       const socket = new WebSocket('ws://localhost:8765');
 
-      socket.addEventListener('open',
-      () => {
-      console.log('Connected to server');
+      socket.addEventListener('open', () => {
+         console.log('Connected to server');
       });
 
-      socket.addEventListener('close',
-      () => {
-      console.log('Disconnected from server');
+      socket.addEventListener('close', () => {
+         console.log('Disconnected from server');
       });
 
-      socket.addEventListener('message',
-      (event) => {
-      const messageDiv = document.createElement('div');
-      messageDiv.textContent = event.data;
-      document.getElementById('messages').appendChild(messageDiv);
+      socket.addEventListener('message', (event) => {
+         const messageDiv = document.createElement('div');
+         messageDiv.textContent = event.data;
+
+         console.log(event.data);
+
+         document.getElementById('messages').appendChild(messageDiv);
       });
 
-      document.getElementById('sendButton').addEventListener('click',
-      () => {
-      const messageInput = document.getElementById('messageInput');
-      const message = messageInput.value;
-      socket.send(message);
-      // messageInput.value = '';
+      document.getElementById('btnSubscribe').addEventListener('click', () => {
+         const csvTicksInput = document.getElementById('csvTicks');
+         const csvTicks = csvTicksInput.value;
+         const ticks = csvTicks.split(',');
+         const message = JSON.stringify({action: 'subscribe', ticks});
+
+         console.log(message);
+         
+         socket.send(message);
+         // messageInput.value = '';
       });
    </script>
 </body>
