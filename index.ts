@@ -3,6 +3,7 @@ import { Server } from "ws";
 import dotenv from "dotenv";
 import Alpaca from "@alpacahq/alpaca-trade-api";
 import { AlpacaCryptoClient } from "@alpacahq/alpaca-trade-api/dist/resources/datav2/crypto_websocket_v1beta3";
+import { backOff } from "exponential-backoff";
 
 dotenv.config();
 
@@ -56,7 +57,13 @@ const runner = async () => {
         // feed: "sip",
     });
 
-    await stream.connect();
+    await backOff(() => stream.connect(), {
+        delayFirstAttempt: true,
+        startingDelay: 5000,
+        numOfAttempts: 3,
+    });
+
+    console.log("Connected to Alpaca");
 
     const wss = new Server({ port: Number(port) });
 
@@ -95,10 +102,10 @@ const runner = async () => {
                 }
             }
         });
-    });
 
-    wss.on("close", () => {
-        console.log("connection closed");
+        ws.on("close", () => {
+            console.log("connection closed");
+        });
     });
 
     // const app = express();
