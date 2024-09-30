@@ -78,7 +78,7 @@ const runner = async () => {
     //     numOfAttempts: 3,
     // });
 
-    const wss = new Server({ port: Number(port) });
+    const wss = new Server({ host: "0.0.0.0", port: Number(port) });
 
     wss.on("connection", (ws) => {
         console.log("new connection established");
