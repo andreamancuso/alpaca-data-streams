@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import Alpaca from "@alpacahq/alpaca-trade-api";
 import { AlpacaCryptoClient } from "@alpacahq/alpaca-trade-api/dist/resources/datav2/crypto_websocket_v1beta3";
 import { backOff } from "exponential-backoff";
+import { Mutex } from "async-mutex";
 
 dotenv.config();
 
@@ -22,8 +23,12 @@ type DataStreamOptions = {
 class DataStream {
     alpaca: Alpaca;
     socket: AlpacaCryptoClient;
+    mutex: Mutex;
+    isConnected = false;
 
     constructor({ baseUrl, apiKey, secretKey, feed }: DataStreamOptions) {
+        this.mutex = new Mutex();
+
         this.alpaca = new Alpaca({
             baseUrl: baseUrl,
             keyId: apiKey,
@@ -35,12 +40,22 @@ class DataStream {
     }
 
     async connect() {
+        const release = await this.mutex.acquire();
+
+        if (this.isConnected) {
+            return;
+        }
+
         return new Promise<void>((resolve, reject) => {
             this.socket.onConnect(() => {
+                console.log("Connected to Alpaca");
+                this.isConnected = true;
+                release();
                 resolve();
             });
 
             this.socket.onError((err) => {
+                release();
                 reject(err);
             });
 
@@ -57,13 +72,11 @@ const runner = async () => {
         // feed: "sip",
     });
 
-    await backOff(() => stream.connect(), {
-        delayFirstAttempt: true,
-        startingDelay: 5000,
-        numOfAttempts: 3,
-    });
-
-    console.log("Connected to Alpaca");
+    // await backOff(() => stream.connect(), {
+    //     delayFirstAttempt: true,
+    //     startingDelay: 5000,
+    //     numOfAttempts: 3,
+    // });
 
     const wss = new Server({ port: Number(port) });
 
@@ -72,7 +85,9 @@ const runner = async () => {
 
         ws.on("error", console.error);
 
-        ws.on("message", function message(rawMessage) {
+        ws.on("message", async (rawMessage) => {
+            await stream.connect();
+
             const message = JSON.parse(rawMessage.toString());
 
             switch (message.action) {
