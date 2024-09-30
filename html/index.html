@@ -1,133 +1,129 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+    <head>
+        <title>WebSocket Example</title>
 
-<head>
-   <title>WebSocket Example</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <!-- <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.min.js"></script> -->
+        <!-- <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script> -->
+    </head>
 
-   <!-- <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.min.js"></script> -->
-   <!-- <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script> -->
+    <body>
+        <h1>WebSocket Client</h1>
 
-</head>
+        <div>
+            <input type="text" id="csvTicks" placeholder="comma-separated ticks" value="BTC/USD,ETH/USD" />
+            <button id="btnSubscribe">Subscribe</button>
+            <button id="btnUnsubscribe">Unsubscribe</button>
+        </div>
 
-<body>
-   <h1>WebSocket Client</h1>
+        <div id="messages"></div>
 
-   <div>
-      <input type="text" id="csvTicks" placeholder="comma-separated ticks" value='BTC/USD,ETH/USD' />
-      <button id="btnSubscribe">Subscribe</button>
-      <button id="btnUnsubscribe">Unsubscribe</button>
-   </div>
+        <canvas id="myChart"></canvas>
 
-   <div id="messages"></div>
+        <script>
+            document.addEventListener("DOMContentLoaded", (event) => {
+                const datasets = {
+                    "BTC/USD": {
+                        label: "BTC/USD",
+                        fill: false,
+                        data: [],
+                    },
+                    "ETH/USD": {
+                        label: "ETH/USD",
+                        fill: false,
+                        data: [],
+                    },
+                };
 
-   <canvas id="myChart"></canvas>
+                // const
 
-   <script>
-      document.addEventListener("DOMContentLoaded", (event) => {
-  
-      const datasets = {
-         'BTC/USD': {
-            label: 'BTC/USD',
-            fill: false,
-            data: []
-         },
-         'ETH/USD': {
-            label: 'ETH/USD',
-            fill: false,
-            data: []
-         }
-      };
+                const data = {
+                    labels: [],
+                    datasets: [datasets["BTC/USD"], datasets["ETH/USD"]],
+                };
 
-      // const 
+                const config = {
+                    type: "line",
+                    data: data,
+                    options: {
+                        // plugins: {
+                        //    title: {
+                        //    text: 'Chart.js Time Scale',
+                        //    display: true
+                        //    }
+                        // },
+                        scales: {
+                            x: {
+                                // type: 'time',
+                                // time: {
+                                //    // Luxon format string
+                                //    tooltipFormat: 'DD T'
+                                // },
+                                title: {
+                                    display: true,
+                                    text: "Date",
+                                },
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: "value",
+                                },
+                            },
+                        },
+                    },
+                };
 
-const data = {
-  labels: [],
-  datasets: [datasets['BTC/USD'], datasets['ETH/USD']]
-};
+                const ctx = document.getElementById("myChart");
 
-const config = {
-         type: 'line',
-         data: data,
-         options: {
-            // plugins: {
-            //    title: {
-            //    text: 'Chart.js Time Scale',
-            //    display: true
-            //    }
-            // },
-            scales: {
-               x: {
-               // type: 'time',
-               // time: {
-               //    // Luxon format string
-               //    tooltipFormat: 'DD T'
-               // },
-               title: {
-                  display: true,
-                  text: 'Date'
-               }
-               },
-               y: {
-               title: {
-                  display: true,
-                  text: 'value'
-               }
-               }
-            },
-         },
-         };
+                const chart = new Chart(ctx, config);
 
+                const addPoint = (sourceKey, x, y) => {
+                    datasets[sourceKey].data.push({ x, y });
 
+                    chart.update();
+                };
 
-const ctx = document.getElementById('myChart');
+                const socket = new WebSocket("ws://localhost:3000");
 
-  const chart = new Chart(ctx, config);
+                socket.addEventListener("open", () => {
+                    console.log("Connected to server");
+                });
 
-  const addPoint = (sourceKey, x, y) => {
-      datasets[sourceKey].data.push({x, y});
+                socket.addEventListener("close", () => {
+                    console.log("Disconnected from server");
+                });
 
-      chart.update();
-   };
+                socket.addEventListener("message", (event) => {
+                    // const messageDiv = document.createElement('div');
+                    // messageDiv.textContent = event.data;
 
-      const socket = new WebSocket('ws://localhost:8765');
+                    const data = JSON.parse(event.data);
 
-      socket.addEventListener('open', () => {
-         console.log('Connected to server');
-      });
+                    console.log(data);
 
-      socket.addEventListener('close', () => {
-         console.log('Disconnected from server');
-      });
+                    addPoint(data.S, data.Timestamp, data.BidPrice);
 
-      socket.addEventListener('message', (event) => {
-         // const messageDiv = document.createElement('div');
-         // messageDiv.textContent = event.data;
+                    // document.getElementById('messages').appendChild(messageDiv);
 
-         const data = JSON.parse(event.data);
+                    // console.log(sources);
+                });
 
-         console.log(data);
+                document.getElementById("btnSubscribe").addEventListener("click", () => {
+                    const csvTicksInput = document.getElementById("csvTicks");
+                    const csvTicks = csvTicksInput.value;
+                    const ticks = csvTicks.split(",");
+                    const message = JSON.stringify({ action: "subscribe", ticks });
 
-         addPoint(data.S, data.Timestamp, data.BidPrice);
+                    console.log(message);
 
-         // document.getElementById('messages').appendChild(messageDiv);
-
-         // console.log(sources);
-      });
-
-      document.getElementById('btnSubscribe').addEventListener('click', () => {
-         const csvTicksInput = document.getElementById('csvTicks');
-         const csvTicks = csvTicksInput.value;
-         const ticks = csvTicks.split(',');
-         const message = JSON.stringify({action: 'subscribe', ticks});
-
-         console.log(message);
-         
-         socket.send(message);
-         // messageInput.value = '';
-      });console.log("DOM fully loaded and parsed");
-   });
-   </script>
-</body>
+                    socket.send(message);
+                    // messageInput.value = '';
+                });
+                console.log("DOM fully loaded and parsed");
+            });
+        </script>
+    </body>
 </html>

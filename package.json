@@ -16,6 +16,7 @@
         "@alpacahq/alpaca-trade-api": "^3.1.2",
         "dotenv": "^16.4.5",
         "express": "^4.21.0",
+        "node-appwrite": "^14.1.0",
         "ws": "^8.18.0"
     },
     "devDependencies": {
