@@ -1,0 +1,29 @@
+{
+    "name": "alpaca-data-streams",
+    "version": "0.0.1",
+    "description": "",
+    "main": "index.js",
+    "directories": {
+        "test": "tests"
+    },
+    "scripts": {
+        "start": "tsx ./index.ts",
+        "build": "npx tsc"
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "@alpacahq/alpaca-trade-api": "^3.1.2",
+        "dotenv": "^16.4.5",
+        "express": "^4.21.0",
+        "ws": "^8.18.0"
+    },
+    "devDependencies": {
+        "@types/dotenv": "^8.2.0",
+        "@types/express": "^5.0.0",
+        "@types/ws": "^8.5.12",
+        "prettier": "^3.3.3",
+        "tsx": "^4.19.1",
+        "typescript": "^5.6.2"
+    }
+}
