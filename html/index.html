@@ -5,14 +5,19 @@
 
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-        <!-- <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.min.js"></script> -->
-        <!-- <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script> -->
+        <style>
+            .basic-grid {
+                display: flex;
+                column-gap: 4px;
+            }
+        </style>
     </head>
 
     <body>
         <h1>WebSocket Client</h1>
 
-        <div>
+        <div class="basic-grid">
+            <input type="text" id="passkey" placeholder="passkey" value="" />
             <input type="text" id="csvTicks" placeholder="comma-separated ticks" value="BTC/USD,ETH/USD" />
             <button id="btnSubscribe">Subscribe</button>
             <button id="btnUnsubscribe">Unsubscribe</button>
@@ -37,8 +42,6 @@
                     },
                 };
 
-                // const
-
                 const data = {
                     labels: [],
                     datasets: [datasets["BTC/USD"], datasets["ETH/USD"]],
@@ -48,19 +51,8 @@
                     type: "line",
                     data: data,
                     options: {
-                        // plugins: {
-                        //    title: {
-                        //    text: 'Chart.js Time Scale',
-                        //    display: true
-                        //    }
-                        // },
                         scales: {
                             x: {
-                                // type: 'time',
-                                // time: {
-                                //    // Luxon format string
-                                //    tooltipFormat: 'DD T'
-                                // },
                                 title: {
                                     display: true,
                                     text: "Date",
@@ -92,35 +84,35 @@
                     console.log("Connected to server");
                 });
 
-                socket.addEventListener("close", () => {
-                    console.log("Disconnected from server");
+                socket.addEventListener("close", (ev) => {
+                    try {
+                        const reason = JSON.parse(ev.reason);
+
+                        console.log(`Disconnected from server: ${reason.message}`);
+                    } catch (error) {
+                        console.log("Disconnected from server");
+                    }
                 });
 
                 socket.addEventListener("message", (event) => {
-                    // const messageDiv = document.createElement('div');
-                    // messageDiv.textContent = event.data;
-
                     const data = JSON.parse(event.data);
 
                     console.log(data);
 
                     addPoint(data.S, data.Timestamp, data.BidPrice);
-
-                    // document.getElementById('messages').appendChild(messageDiv);
-
-                    // console.log(sources);
                 });
 
                 document.getElementById("btnSubscribe").addEventListener("click", () => {
+                    const passkeyInput = document.getElementById("passkey");
                     const csvTicksInput = document.getElementById("csvTicks");
+                    const passkey = passkeyInput.value;
                     const csvTicks = csvTicksInput.value;
                     const ticks = csvTicks.split(",");
-                    const message = JSON.stringify({ action: "subscribe", ticks });
+                    const message = JSON.stringify({ passkey, action: "subscribe", ticks });
 
                     console.log(message);
 
                     socket.send(message);
-                    // messageInput.value = '';
                 });
                 console.log("DOM fully loaded and parsed");
             });

@@ -1,6 +1,7 @@
 // import express, { Request, Response } from "express";
 import { Server } from "ws";
 import dotenv from "dotenv";
+import { v4 as uuidv4 } from "uuid";
 import Alpaca from "@alpacahq/alpaca-trade-api";
 import { AlpacaCryptoClient } from "@alpacahq/alpaca-trade-api/dist/resources/datav2/crypto_websocket_v1beta3";
 import { backOff } from "exponential-backoff";
@@ -65,11 +66,14 @@ class DataStream {
 }
 
 const runner = async () => {
+    const passkey = uuidv4();
+
+    console.log(`Using passkey ${passkey}`);
+
     const stream = new DataStream({
         baseUrl: API_ENDPOINT,
         apiKey: API_KEY,
         secretKey: API_SECRET,
-        // feed: "sip",
     });
 
     // await backOff(() => stream.connect(), {
@@ -86,22 +90,19 @@ const runner = async () => {
         ws.on("error", console.error);
 
         ws.on("message", async (rawMessage) => {
-            await stream.connect();
+            try {
+                const message = JSON.parse(rawMessage.toString());
 
-            const message = JSON.parse(rawMessage.toString());
+                if (message.passkey === passkey) {
+                    await stream.connect();
 
-            switch (message.action) {
-                case "subscribe": {
-                    // console.log("a");
-                    stream.socket.subscribeForQuotes(message.ticks);
-                    // console.log("b");
-                    stream.socket.onCryptoQuote((quote) => {
-                        ws.send(JSON.stringify(quote));
-                        // console.log(quote);
-                    });
-                    // console.log("c");
-
-                    /**
+                    switch (message.action) {
+                        case "subscribe": {
+                            stream.socket.subscribeForQuotes(message.ticks);
+                            stream.socket.onCryptoQuote((quote) => {
+                                ws.send(JSON.stringify(quote));
+                            });
+                            /**
                      * {
                         T: 'q',
                         S: 'ETH/USD',
@@ -113,8 +114,16 @@ const runner = async () => {
                         }
                      */
 
-                    break;
+                            break;
+                        }
+                    }
+                } else {
+                    ws.close(4001, JSON.stringify({ message: "Unauthorized" }));
                 }
+            } catch (error) {
+                console.error(error);
+
+                ws.close();
             }
         });
 
