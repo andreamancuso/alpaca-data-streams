@@ -6,6 +6,7 @@ import Alpaca from "@alpacahq/alpaca-trade-api";
 import { AlpacaCryptoClient } from "@alpacahq/alpaca-trade-api/dist/resources/datav2/crypto_websocket_v1beta3";
 import { backOff } from "exponential-backoff";
 import { Mutex } from "async-mutex";
+import { AlpacaStocksClient } from "@alpacahq/alpaca-trade-api/dist/resources/datav2/stock_websocket_v2";
 
 dotenv.config();
 
@@ -23,9 +24,11 @@ type DataStreamOptions = {
 
 class DataStream {
     alpaca: Alpaca;
-    socket: AlpacaCryptoClient;
+    stocksSocket: AlpacaStocksClient;
+    cryptoSocket: AlpacaCryptoClient;
     mutex: Mutex;
-    isConnected = false;
+    isConnectedToCrypto = false;
+    isConnectedToStocks = false;
 
     constructor({ baseUrl, apiKey, secretKey, feed }: DataStreamOptions) {
         this.mutex = new Mutex();
@@ -37,30 +40,70 @@ class DataStream {
             // feed,
         });
 
-        this.socket = this.alpaca.crypto_stream_v1beta3;
+        this.stocksSocket = this.alpaca.data_stream_v2;
+        this.cryptoSocket = this.alpaca.crypto_stream_v1beta3;
+
+        this.stocksSocket.onDisconnect(this.onDisconnectFromStocks);
+        this.cryptoSocket.onDisconnect(this.onDisconnectFromCrypto);
     }
 
     async connect() {
         const release = await this.mutex.acquire();
 
-        if (this.isConnected) {
+        if (this.isConnectedToCrypto || this.isConnectedToStocks) {
             return;
         }
 
+        try {
+            await Promise.all([this.connectToCrypto(), this.connectToStocks()]);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            release();
+        }
+    }
+
+    async getAssets() {
+        return this.alpaca.getAssets({ asset_class: "crypto" });
+    }
+
+    onDisconnectFromStocks = () => {
+        console.log("disconnected from stocks");
+    };
+
+    onDisconnectFromCrypto = () => {
+        console.log("disconnected from crypto");
+    };
+
+    private async connectToStocks() {
         return new Promise<void>((resolve, reject) => {
-            this.socket.onConnect(() => {
-                console.log("Connected to Alpaca");
-                this.isConnected = true;
-                release();
+            this.stocksSocket.onConnect(() => {
+                console.log("Connected to Stocks");
+                this.isConnectedToStocks = true;
                 resolve();
             });
 
-            this.socket.onError((err) => {
-                release();
+            this.stocksSocket.onError((err) => {
                 reject(err);
             });
 
-            this.socket.connect();
+            this.stocksSocket.connect();
+        });
+    }
+
+    private async connectToCrypto() {
+        return new Promise<void>((resolve, reject) => {
+            this.cryptoSocket.onConnect(() => {
+                console.log("Connected to Crypto");
+                this.isConnectedToCrypto = true;
+                resolve();
+            });
+
+            this.cryptoSocket.onError((err) => {
+                reject(err);
+            });
+
+            this.cryptoSocket.connect();
         });
     }
 }
@@ -93,15 +136,16 @@ const runner = async () => {
             try {
                 const message = JSON.parse(rawMessage.toString());
 
-                if (message.passkey === passkey) {
+                if (true) {
                     await stream.connect();
 
                     switch (message.action) {
                         case "subscribe": {
-                            stream.socket.subscribeForQuotes(message.ticks);
-                            stream.socket.onCryptoQuote((quote) => {
+                            stream.cryptoSocket.subscribeForQuotes(message.ticks);
+                            stream.cryptoSocket.onCryptoQuote((quote) => {
                                 ws.send(JSON.stringify(quote));
                             });
+
                             /**
                      * {
                         T: 'q',
@@ -114,6 +158,12 @@ const runner = async () => {
                         }
                      */
 
+                            break;
+                        }
+
+                        case "getAssets": {
+                            const result = await stream.getAssets();
+                            ws.send(JSON.stringify(result));
                             break;
                         }
                     }
