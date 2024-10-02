@@ -7,6 +7,8 @@ import { AlpacaCryptoClient } from "@alpacahq/alpaca-trade-api/dist/resources/da
 import { backOff } from "exponential-backoff";
 import { Mutex } from "async-mutex";
 import { AlpacaStocksClient } from "@alpacahq/alpaca-trade-api/dist/resources/datav2/stock_websocket_v2";
+import { GetQuotesParams } from "@alpacahq/alpaca-trade-api/dist/resources/datav2/rest_v2";
+import { EVENT, STATE } from "@alpacahq/alpaca-trade-api/dist/resources/datav2/websocket";
 
 dotenv.config();
 
@@ -20,6 +22,19 @@ type DataStreamOptions = {
     apiKey: string;
     secretKey: string;
     feed?: string;
+};
+
+type Config = {
+    baseUrl: any;
+    dataBaseUrl: any;
+    dataStreamUrl: any;
+    keyId: any;
+    secretKey: any;
+    apiVersion: any;
+    oauth: any;
+    feed: any;
+    optionFeed: any;
+    verbose: any;
 };
 
 class DataStream {
@@ -42,20 +57,24 @@ class DataStream {
 
         this.stocksSocket = this.alpaca.data_stream_v2;
         this.cryptoSocket = this.alpaca.crypto_stream_v1beta3;
-
-        this.stocksSocket.onDisconnect(this.onDisconnectFromStocks);
-        this.cryptoSocket.onDisconnect(this.onDisconnectFromCrypto);
     }
 
     async connect() {
         const release = await this.mutex.acquire();
 
-        if (this.isConnectedToCrypto || this.isConnectedToStocks) {
+        // if (this.isConnectedToCrypto || this.isConnectedToStocks) {
+        //     return;
+        // }
+
+        if (this.isConnectedToCrypto) {
             return;
         }
 
         try {
-            await Promise.all([this.connectToCrypto(), this.connectToStocks()]);
+            await Promise.all([
+                this.connectToCrypto(),
+                // this.connectToStocks()
+            ]);
         } catch (error) {
             console.error(error);
         } finally {
@@ -63,16 +82,37 @@ class DataStream {
         }
     }
 
-    async getAssets() {
-        return this.alpaca.getAssets({ asset_class: "crypto" });
+    async disconnect() {
+        this.cryptoSocket.disconnect();
+    }
+
+    async getCryptoAssets() {
+        return this.alpaca.getAssets({ asset_class: "crypto", status: "active" });
+    }
+
+    async getQuotes(symbols: string[], options: GetQuotesParams, config?: Config) {
+        return this.alpaca.getMultiQuotesV2(symbols, options, config);
+    }
+
+    async getCryptoQuotes(symbols: string[], options: GetQuotesParams, config?: Config) {
+        return this.alpaca.getCryptoQuotes(symbols, options, config);
+    }
+
+    async getLatestCryptoQuotes(symbols: string[], config?: Config) {
+        return this.alpaca.getLatestCryptoQuotes(symbols, config);
     }
 
     onDisconnectFromStocks = () => {
         console.log("disconnected from stocks");
+
+        this.isConnectedToStocks = false;
     };
 
     onDisconnectFromCrypto = () => {
         console.log("disconnected from crypto");
+
+        this.isConnectedToCrypto = false;
+        // this.cryptoSocket.removeAllListeners();
     };
 
     private async connectToStocks() {
@@ -80,6 +120,7 @@ class DataStream {
             this.stocksSocket.onConnect(() => {
                 console.log("Connected to Stocks");
                 this.isConnectedToStocks = true;
+                this.stocksSocket.onDisconnect(this.onDisconnectFromStocks);
                 resolve();
             });
 
@@ -93,14 +134,15 @@ class DataStream {
 
     private async connectToCrypto() {
         return new Promise<void>((resolve, reject) => {
-            this.cryptoSocket.onConnect(() => {
+            this.cryptoSocket.once(STATE.AUTHENTICATED, () => {
                 console.log("Connected to Crypto");
                 this.isConnectedToCrypto = true;
+                this.cryptoSocket.onDisconnect(this.onDisconnectFromCrypto);
                 resolve();
             });
 
-            this.cryptoSocket.onError((err) => {
-                reject(err);
+            this.cryptoSocket.once(EVENT.CLIENT_ERROR, (code) => {
+                reject(code);
             });
 
             this.cryptoSocket.connect();
@@ -127,6 +169,26 @@ const runner = async () => {
 
     const wss = new Server({ host: "0.0.0.0", port: Number(port) });
 
+    const sendToActiveClients = (data: any) => {
+        wss.clients.forEach((client) => {
+            if (client.readyState === client.OPEN) {
+                client.send(data);
+            }
+        });
+    };
+
+    stream.cryptoSocket.onCryptoQuote((cryptoQuote) => {
+        sendToActiveClients(JSON.stringify({ cryptoQuote }));
+    });
+
+    stream.cryptoSocket.onCryptoTrade((cryptoTrade) => {
+        sendToActiveClients(JSON.stringify({ cryptoTrade }));
+    });
+
+    stream.cryptoSocket.onCryptoBar((cryptoBar) => {
+        sendToActiveClients(JSON.stringify({ cryptoBar }));
+    });
+
     wss.on("connection", (ws) => {
         console.log("new connection established");
 
@@ -137,33 +199,49 @@ const runner = async () => {
                 const message = JSON.parse(rawMessage.toString());
 
                 if (true) {
-                    await stream.connect();
-
                     switch (message.action) {
-                        case "subscribe": {
-                            stream.cryptoSocket.subscribeForQuotes(message.ticks);
-                            stream.cryptoSocket.onCryptoQuote((quote) => {
-                                ws.send(JSON.stringify(quote));
-                            });
-
-                            /**
-                     * {
-                        T: 'q',
-                        S: 'ETH/USD',
-                        BidPrice: 2664.6,
-                        BidSize: 10.679,
-                        AskPrice: 2666.2,
-                        AskSize: 21.384,
-                        Timestamp: 2024-09-29T19:35:05.116Z
+                        case "subscribeForCryptoQuotes": {
+                            await stream.connect();
+                            stream.cryptoSocket.subscribeForQuotes(message.symbols);
+                            break;
                         }
-                     */
-
+                        case "subscribeForTrades": {
+                            stream.cryptoSocket.subscribeForTrades(message.symbols);
+                            break;
+                        }
+                        case "subscribeForBars": {
+                            stream.cryptoSocket.subscribeForBars(message.symbols);
                             break;
                         }
 
-                        case "getAssets": {
-                            const result = await stream.getAssets();
-                            ws.send(JSON.stringify(result));
+                        case "getCryptoAssets": {
+                            const cryptoAssets = await stream.getCryptoAssets();
+                            // console.log(cryptoAssets);
+                            ws.send(JSON.stringify({ cryptoAssets }));
+                            // await stream.disconnect();
+                            break;
+                        }
+
+                        case "getQuotes": {
+                            const quotes = await stream.getQuotes(message.symbols, message.options ?? {});
+                            ws.send(JSON.stringify(Object.fromEntries(quotes)));
+                            break;
+                        }
+
+                        case "getCryptoQuotes": {
+                            const quotes = await stream.getCryptoQuotes(message.symbols, message.options ?? {});
+                            ws.send(JSON.stringify(Object.fromEntries(quotes)));
+                            break;
+                        }
+
+                        case "getLatestCryptoQuotes": {
+                            console.log("here");
+
+                            const latestCryptoQuotes = await stream.getLatestCryptoQuotes(message.symbols);
+
+                            console.log(latestCryptoQuotes);
+
+                            ws.send(JSON.stringify(Object.fromEntries(latestCryptoQuotes)));
                             break;
                         }
                     }
