@@ -224,24 +224,19 @@ const runner = async () => {
 
                         case "getQuotes": {
                             const quotes = await stream.getQuotes(message.symbols, message.options ?? {});
-                            ws.send(JSON.stringify(Object.fromEntries(quotes)));
+                            ws.send(JSON.stringify({ quotes: Object.fromEntries(quotes) }));
                             break;
                         }
 
                         case "getCryptoQuotes": {
-                            const quotes = await stream.getCryptoQuotes(message.symbols, message.options ?? {});
-                            ws.send(JSON.stringify(Object.fromEntries(quotes)));
+                            const cryptoQuotes = await stream.getCryptoQuotes(message.symbols, message.options ?? {});
+                            ws.send(JSON.stringify({ cryptoQuotes: Object.fromEntries(cryptoQuotes) }));
                             break;
                         }
 
                         case "getLatestCryptoQuotes": {
-                            console.log("here");
-
                             const latestCryptoQuotes = await stream.getLatestCryptoQuotes(message.symbols);
-
-                            console.log(latestCryptoQuotes);
-
-                            ws.send(JSON.stringify(Object.fromEntries(latestCryptoQuotes)));
+                            ws.send(JSON.stringify({ latestCryptoQuotes: Object.fromEntries(latestCryptoQuotes) }));
                             break;
                         }
                     }
