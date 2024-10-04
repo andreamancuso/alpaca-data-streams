@@ -98,6 +98,10 @@ class DataStream {
         return this.alpaca.getCryptoQuotes(symbols, options, config);
     }
 
+    async getCryptoSnapshots(symbols: string[], config?: Config) {
+        return this.alpaca.getCryptoSnapshots(symbols, config);
+    }
+
     async getLatestCryptoQuotes(symbols: string[], config?: Config) {
         return this.alpaca.getLatestCryptoQuotes(symbols, config);
     }
@@ -231,6 +235,12 @@ const runner = async () => {
                         case "getCryptoQuotes": {
                             const cryptoQuotes = await stream.getCryptoQuotes(message.symbols, message.options ?? {});
                             ws.send(JSON.stringify({ cryptoQuotes: Object.fromEntries(cryptoQuotes) }));
+                            break;
+                        }
+
+                        case "getCryptoSnapshots": {
+                            const cryptoSnapshots = await stream.getCryptoSnapshots(message.symbols);
+                            ws.send(JSON.stringify({ cryptoSnapshots: Object.fromEntries(cryptoSnapshots) }));
                             break;
                         }
 
