@@ -7,7 +7,7 @@ import { AlpacaCryptoClient } from "@alpacahq/alpaca-trade-api/dist/resources/da
 import { backOff } from "exponential-backoff";
 import { Mutex } from "async-mutex";
 import { AlpacaStocksClient } from "@alpacahq/alpaca-trade-api/dist/resources/datav2/stock_websocket_v2";
-import { GetQuotesParams } from "@alpacahq/alpaca-trade-api/dist/resources/datav2/rest_v2";
+import { GetCryptoBarsParams, GetQuotesParams } from "@alpacahq/alpaca-trade-api/dist/resources/datav2/rest_v2";
 import { EVENT, STATE } from "@alpacahq/alpaca-trade-api/dist/resources/datav2/websocket";
 
 dotenv.config();
@@ -98,12 +98,20 @@ class DataStream {
         return this.alpaca.getCryptoQuotes(symbols, options, config);
     }
 
+    async getCryptoBars(symbols: string[], options: GetCryptoBarsParams, config?: Config) {
+        return this.alpaca.getCryptoBars(symbols, options, config);
+    }
+
     async getCryptoSnapshots(symbols: string[], config?: Config) {
         return this.alpaca.getCryptoSnapshots(symbols, config);
     }
 
     async getLatestCryptoQuotes(symbols: string[], config?: Config) {
         return this.alpaca.getLatestCryptoQuotes(symbols, config);
+    }
+
+    async getLatestCryptoBars(symbols: string[], config?: Config) {
+        return this.alpaca.getLatestCryptoBars(symbols, config);
     }
 
     onDisconnectFromStocks = () => {
@@ -238,6 +246,12 @@ const runner = async () => {
                             break;
                         }
 
+                        case "getCryptoBars": {
+                            const cryptoBars = await stream.getCryptoBars(message.symbols, message.options ?? {});
+                            ws.send(JSON.stringify({ cryptoBars: Object.fromEntries(cryptoBars) }));
+                            break;
+                        }
+
                         case "getCryptoSnapshots": {
                             const cryptoSnapshots = await stream.getCryptoSnapshots(message.symbols);
                             ws.send(JSON.stringify({ cryptoSnapshots: Object.fromEntries(cryptoSnapshots) }));
@@ -247,6 +261,12 @@ const runner = async () => {
                         case "getLatestCryptoQuotes": {
                             const latestCryptoQuotes = await stream.getLatestCryptoQuotes(message.symbols);
                             ws.send(JSON.stringify({ latestCryptoQuotes: Object.fromEntries(latestCryptoQuotes) }));
+                            break;
+                        }
+
+                        case "getLatestCryptoBars": {
+                            const latestCryptoBars = await stream.getLatestCryptoBars(message.symbols);
+                            ws.send(JSON.stringify({ latestCryptoBars: Object.fromEntries(latestCryptoBars) }));
                             break;
                         }
                     }
